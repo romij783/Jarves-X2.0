@@ -1,0 +1,379 @@
+code
+Html
+play_circle
+download
+content_copy
+expand_less
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS X | NEURAL INTERFACE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=JetBrains+Mono:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-cyan: #00f2ff;
+            --neon-blue: #0072ff;
+            --bg-dark: #050505;
+            --hacker-green: #0f0;
+            --terminal-text: #00f2ff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--terminal-text);
+            font-family: 'JetBrains+Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        .ui-container {
+            width: 90%;
+            max-width: 800px;
+            background: rgba(0, 20, 30, 0.8);
+            border: 1px solid var(--neon-cyan);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+            padding: 20px;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--neon-cyan);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .status-bar {
+            font-size: 0.8rem;
+            display: flex;
+            gap: 15px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #444;
+        }
+
+        .status-dot.active {
+            background: var(--hacker-green);
+            box-shadow: 0 0 10px var(--hacker-green);
+        }
+
+        #terminal {
+            height: 250px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            border-left: 2px solid var(--neon-cyan);
+        }
+
+        .user-line { color: #fff; opacity: 0.7; margin-bottom: 5px; }
+        .jarvis-line { color: var(--neon-cyan); font-weight: bold; margin-bottom: 15px; }
+
+        .visualizer-box {
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .bar {
+            width: 4px;
+            height: 10px;
+            background: var(--neon-cyan);
+            transition: height 0.1s ease;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        input[type="password"] {
+            background: #001a1a;
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 8px;
+            flex-grow: 1;
+            outline: none;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 8px 20px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: var(--neon-cyan);
+            color: #000;
+        }
+
+        button.listening {
+            background: #ff0055;
+            border-color: #ff0055;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: var(--neon-cyan); }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas-container"></canvas>
+
+    <div class="ui-container">
+        <div class="header">
+            <h1>JARVIS X // V2.0</h1>
+            <div class="status-bar">
+                <span>SYSTEM: <span id="sys-status">ONLINE</span></span>
+                <span>UPLINK: <div id="uplink-dot" class="status-dot"></div></span>
+            </div>
+        </div>
+
+        <div id="terminal">
+            <div class="jarvis-line">INITIALIZING... SYSTEM READY. STANDING BY.</div>
+        </div>
+
+        <div class="visualizer-box" id="visualizer">
+            <!-- Bars added by JS -->
+        </div>
+
+        <div class="controls">
+            <input type="password" id="api-key" placeholder="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" />
+            <button id="mic-btn">ACTIVATE MICROPHONE</button>
+        </div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const micBtn = document.getElementById('mic-btn');
+        const apiKeyInput = document.getElementById('api-key');
+        const visualizer = document.getElementById('visualizer');
+        const uplinkDot = document.getElementById('uplink-dot');
+
+        let recognition;
+        let isListening = false;
+        let synth = window.speechSynthesis;
+        let jarvisVoice = null;
+
+        // Initialize Audio Bars
+        for (let i = 0; i < 40; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            visualizer.appendChild(bar);
+        }
+        const bars = document.querySelectorAll('.bar');
+
+        // Load API Key
+        if (localStorage.getItem('jarvis_key')) {
+            apiKeyInput.value = localStorage.getItem('jarvis_key');
+        }
+
+        // Voice Setup
+        function initVoice() {
+            const voices = synth.getVoices();
+            // Search for high-quality natural voices
+            jarvisVoice = voices.find(v => v.name.includes('Google US English') && v.name.includes('Male')) ||
+                          voices.find(v => v.lang === 'en-IN' && v.name.includes('Google')) ||
+                          voices.find(v => v.lang.startsWith('en-')) ||
+                          voices[0];
+        }
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = initVoice;
+        }
+
+        // Speech Recognition Setup
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                isListening = true;
+                micBtn.textContent = "LISTENING...";
+                micBtn.classList.add('listening');
+                animateVisualizer(true);
+            };
+
+            recognition.onresult = async (event) => {
+                const text = event.results[0][0].transcript;
+                addLog('USER', text, 'user-line');
+                processCommand(text);
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                micBtn.textContent = "ACTIVATE MICROPHONE";
+                micBtn.classList.remove('listening');
+                animateVisualizer(false);
+            };
+        }
+
+        async function processCommand(input) {
+            const apiKey = apiKeyInput.value;
+            if (!apiKey) {
+                speak("Sir, please provide an API key in the terminal console.");
+                return;
+            }
+            localStorage.setItem('jarvis_key', apiKey);
+            uplinkDot.classList.add('active');
+
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": window.location.href,
+                        "X-Title": "Jarvis X"
+                    },
+                    body: JSON.stringify({
+                        "model": "openai/gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": "You are Jarvis X. A calm, intelligent, human-like voice assistant. Your tone is professional and confident. Use short replies. Avoid robotic phrases like 'As an AI'. Never use bullet points. Speak naturally."},
+                            {"role": "user", "content": input}
+                        ]
+                    })
+                });
+
+                const data = await response.json();
+                const reply = data.choices[0].message.content;
+                addLog('JARVIS X', reply, 'jarvis-line');
+                speak(reply);
+            } catch (err) {
+                speak("Uplink failed. Please check your connection.");
+            } finally {
+                uplinkDot.classList.remove('active');
+            }
+        }
+
+        function speak(text) {
+            // Cancel current speech
+            synth.cancel();
+
+            // 300-500ms delay for human-like processing pause
+            setTimeout(() => {
+                const chunks = text.match(/[^.!?]+[.!?]*/g) || [text];
+                
+                chunks.forEach((chunk, index) => {
+                    const utterance = new SpeechSynthesisUtterance(chunk);
+                    utterance.voice = jarvisVoice;
+                    utterance.pitch = 0.92; // Slightly lower pitch
+                    utterance.rate = 1.0;   // Normal rate
+                    utterance.volume = 1;
+
+                    utterance.onstart = () => animateVisualizer(true);
+                    utterance.onend = () => {
+                        if (index === chunks.length - 1) animateVisualizer(false);
+                    };
+
+                    synth.speak(utterance);
+                });
+            }, 400);
+        }
+
+        function addLog(sender, text, className) {
+            const div = document.createElement('div');
+            div.className = className;
+            div.innerHTML = `> ${sender}: ${text}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function animateVisualizer(active) {
+            bars.forEach(bar => {
+                if (active) {
+                    const h = Math.random() * 80 + 10;
+                    bar.style.height = `${h}px`;
+                } else {
+                    bar.style.height = '10px';
+                }
+            });
+            if (active) setTimeout(() => animateVisualizer(true), 100);
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (isListening) recognition.stop();
+            else recognition.start();
+        });
+
+        // Background Matrix Effect
+        const canvas = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()*&^";
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#00f2ff22";
+            ctx.font = fontSize + "px monospace";
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 50);
+
+        window.onresize = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+    </script>
+</body>
+</html>
